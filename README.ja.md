@@ -166,6 +166,8 @@ inkos short run \
 
 表紙ツールは `covers/<title>/cover-prompt.md` と `covers/<title>/cover.png` を生成します。表紙サービス未設定の場合は、先に Studio のモデル設定で表紙サービスと API Key を設定してください。
 
+生成後もチャットで表紙プロンプトを調整できます。例：「人物をもっと近く、タイトル文字を大きく、冷たい笑みにして」。InkOS は新しい指示を `coverPrompt` として渡し、`cover-prompt.md` を更新して表紙を再生成します。本文を書き直す必要はありません。
+
 <p align="center">
   <img src="assets/screenshot-terminal.png" width="700" alt="ターミナルスクリーンショット">
 </p>

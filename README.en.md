@@ -180,6 +180,8 @@ Generate a short-fiction cover for "The Divorce Papers He Regretted", modern cit
 
 The cover tool writes `covers/<title>/cover-prompt.md` and `covers/<title>/cover.png`. If no cover provider is configured yet, set the cover provider and API key in Studio model settings first.
 
+After generation, you can keep editing the cover prompt through chat, for example: "move the character closer, make the title text bigger, and give her a colder smile." InkOS will pass the revised direction as `coverPrompt`, rewrite `cover-prompt.md`, and regenerate the cover without rewriting the story.
+
 <p align="center">
   <img src="assets/screenshot-terminal.png" width="700" alt="Terminal screenshot">
 </p>

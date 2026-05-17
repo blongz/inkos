@@ -33,6 +33,15 @@ describe("buildAgentSystemPrompt", () => {
       expect(prompt).toContain("不要在回复中添加表情符号");
     });
 
+    it("no-book prompt routes cover prompt edits to generate_cover", () => {
+      const zhPrompt = buildAgentSystemPrompt(null, "zh");
+      const enPrompt = buildAgentSystemPrompt(null, "en");
+      expect(zhPrompt).toContain("修改封面提示词");
+      expect(zhPrompt).toContain("coverPrompt");
+      expect(enPrompt).toContain("revise the cover prompt");
+      expect(enPrompt).toContain("coverPrompt");
+    });
+
     it("English prompt forbids emoji", () => {
       const prompt = buildAgentSystemPrompt(null, "en");
       expect(prompt).toContain("Do NOT use emoji");
@@ -84,6 +93,15 @@ describe("buildAgentSystemPrompt", () => {
       expect(prompt).toContain("用户要求重写/精修已有章节");
       expect(prompt).toContain("reviser");
       expect(prompt).toContain("edit / write 是高权限兜底工具");
+    });
+
+    it("with-book prompt routes cover prompt edits to generate_cover", () => {
+      const zhPrompt = buildAgentSystemPrompt("my-book", "zh");
+      const enPrompt = buildAgentSystemPrompt("novel", "en");
+      expect(zhPrompt).toContain("通过 chat 修改封面提示词");
+      expect(zhPrompt).toContain("coverPrompt");
+      expect(enPrompt).toContain("revise the cover prompt / visual direction through chat");
+      expect(enPrompt).toContain("coverPrompt");
     });
 
     it("with-book prompt defines active-book and raw-tool boundaries", () => {

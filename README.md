@@ -251,6 +251,8 @@ inkos short run \
 
 封面工具会独立生成 `covers/<标题>/cover-prompt.md` 和 `covers/<标题>/cover.png`。如果还没有配置封面服务，先在 Studio 的模型配置里设置封面服务和 API Key。
 
+生成后也可以继续通过 chat 改封面提示词，例如“把人物拉近一点、标题字更大、表情更冷笑”。系统会用新的 `coverPrompt` 重写 `cover-prompt.md` 并重生成封面，不需要重新写短篇。
+
 <p align="center">
   <img src="assets/screenshot-terminal.png" width="700" alt="终端截图">
 </p>

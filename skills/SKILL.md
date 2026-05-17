@@ -454,6 +454,7 @@ These are the preferred tools when InkOS is driven by OpenClaw, Studio chat, or 
   - Generates only a cover prompt and cover image
   - Writes to `covers/<title>/` by default
   - Use when the user asks to create or regenerate a cover for an existing title, synopsis, or completed short
+  - Also use when the user changes the cover prompt through chat; pass the revised visual direction as `coverPrompt` and reuse the existing `outputDir` when available
   - Do not rerun story generation unless the user explicitly asks for a new story
 
 `write_truth_file` remains available for broad file edits, but prefer the dedicated control tools above for input-governance changes.
