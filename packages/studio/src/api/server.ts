@@ -144,6 +144,9 @@ const NON_TEXT_MODEL_ID_PARTS = [
 
 const SERVICE_MODELS_PROBE_TIMEOUT_MS = 4_000;
 const SERVICE_CHAT_PROBE_TIMEOUT_MS = 8_000;
+// Hard ceiling for the whole /doctor connectivity probe (models + chat fallback
+// loop) so the diagnostics page never spins on a slow/rate-limited upstream.
+const DOCTOR_LLM_PROBE_BUDGET_MS = 9_000;
 const MAX_DISCOVERED_MODELS_TO_PING = 2;
 const MAX_GENERIC_FALLBACK_MODELS_TO_PING = 2;
 
@@ -1333,7 +1336,10 @@ async function probeServiceCapabilities(args: {
 
       try {
         await withTimeout(
-          chatCompletion(client, model, [{ role: "user", content: "Reply with OK only." }], { maxTokens: 16 }),
+          // A connectivity probe wants a fast pass/fail — never the transient
+          // retry+backoff, which would multiply the time when the upstream is
+          // rate-limiting (and make the diagnostics page hang).
+          chatCompletion(client, model, [{ role: "user", content: "Reply with OK only." }], { maxTokens: 16, retry: false }),
           SERVICE_CHAT_PROBE_TIMEOUT_MS,
           "service connection test",
         );
@@ -4028,18 +4034,25 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     try {
       const currentConfig = await loadCurrentProjectConfig({ requireApiKey: false });
       const service = currentConfig.llm.service ?? currentConfig.llm.provider;
-      const probe = await probeServiceCapabilities({
-        root,
-        service,
-        apiKey: currentConfig.llm.apiKey,
-        baseUrl: currentConfig.llm.baseUrl,
-        preferredApiFormat: currentConfig.llm.apiFormat,
-        preferredStream: currentConfig.llm.stream,
-        preferredModel: currentConfig.llm.model,
-        proxyUrl: currentConfig.llm.proxyUrl,
-      });
+      // Hard overall budget so the diagnostics page never hangs on a slow /
+      // rate-limited upstream — if we can't confirm connectivity quickly, report
+      // it as not-connected rather than spinning.
+      const probe = await withTimeout(
+        probeServiceCapabilities({
+          root,
+          service,
+          apiKey: currentConfig.llm.apiKey,
+          baseUrl: currentConfig.llm.baseUrl,
+          preferredApiFormat: currentConfig.llm.apiFormat,
+          preferredStream: currentConfig.llm.stream,
+          preferredModel: currentConfig.llm.model,
+          proxyUrl: currentConfig.llm.proxyUrl,
+        }),
+        DOCTOR_LLM_PROBE_BUDGET_MS,
+        "doctor llm probe",
+      );
       checks.llmConnected = probe.ok;
-    } catch { /* ignore */ }
+    } catch { /* slow/unreachable upstream — leave llmConnected false */ }
 
     return c.json(checks);
   });
