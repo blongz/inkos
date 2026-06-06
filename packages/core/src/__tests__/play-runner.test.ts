@@ -156,6 +156,71 @@ describe("PlayRunner", () => {
       .resolves.toContain("屏幕弹出新城花园 187 次");
   });
 
+  it("seeds opening graph state without consuming the first player turn", async () => {
+    const db = new FakePlayDB();
+    const store = new PlayStore(root);
+    await store.createWorld({
+      id: "opening-seed",
+      title: "雨夜档案",
+      premise: "玩家是县医院档案室临时工，暴雨夜寻找二十年前的手术记录。",
+      language: "zh",
+    });
+    await store.ensureRun("opening-seed", "main");
+    await store.writeProjection("opening-seed", "main", "projections/scene.md", "档案柜里只有一张无名婴儿照片。\n");
+
+    const seedMutation: PlayMutationInput = {
+      eventId: "evt-0",
+      turn: 0,
+      actionKind: "look",
+      summary: "播种开场已成立的档案室状态。",
+      entities: {
+        upsert: [
+          { id: "actor_player", type: "actor", label: "我", summary: "县医院档案室临时工。", status: "值夜班", updatedEventId: "evt-0" },
+          { id: "evidence_baby_photo", type: "evidence", label: "无名婴儿照片", summary: "替代手术记录出现的照片。", status: "已发现", updatedEventId: "evt-0" },
+        ],
+      },
+      edges: {
+        upsert: [
+          { id: "edge_actor_player_持有_evidence_baby_photo", fromId: "actor_player", type: "持有", toId: "evidence_baby_photo", value: { role: "holding" }, validFromEventId: "evt-0", sourceEventId: "evt-0" },
+        ],
+      },
+      stateSlots: {
+        upsert: [
+          { id: "slot_callback_timer", kind: "timer", label: "护士长回拨倒计时", value: 15, updatedEventId: "evt-0" },
+        ],
+      },
+    };
+    const runner = new PlayRunner({
+      projectRoot: root,
+      worldId: "opening-seed",
+      runId: "main",
+      store,
+      db,
+      agents: {
+        actionInterpreter: { interpret: vi.fn(async () => ({ actionKind: "look", intent: "开场播种" })) },
+        worldMutator: { proposeMutation: vi.fn(async () => seedMutation) },
+        sceneRenderer: { render: vi.fn(async () => ({ sceneText: "不会被调用", suggestedActions: [] })) },
+      },
+    });
+
+    const result = await runner.seedOpening({
+      sceneText: "档案柜里只有一张无名婴儿照片。",
+      suggestedActions: ["检查照片背面"],
+    });
+
+    expect(result?.mutation.turn).toBe(0);
+    expect(db.entities.get("evidence_baby_photo")?.label).toBe("无名婴儿照片");
+    expect([...db.edges.values()].some((edge) => edge.value?.role === "holding")).toBe(true);
+    expect(db.stateSlots.get("slot_callback_timer")?.value).toBe(15);
+    expect(db.events).toHaveLength(0);
+    await expect(readFile(join(root, "worlds", "opening-seed", "runs", "main", "events.jsonl"), "utf-8"))
+      .rejects
+      .toThrow();
+    await expect(readFile(join(root, "worlds", "opening-seed", "runs", "main", "projections", "state.md"), "utf-8"))
+      .resolves
+      .toContain("无名婴儿照片");
+  });
+
   it("does not persist a one-sided user transcript when mutation application fails", async () => {
     const db = new FakePlayDB();
     const runner = new PlayRunner({

@@ -693,7 +693,7 @@ async function executeConfirmedProductionAction(args: {
   } else if (args.requestedIntent === "play_start") {
     const payload = actionPayload?.playStart;
     const title = requirePayloadText(payload?.title, "确认启动互动世界缺少标题，请重新生成确认卡。");
-    tool = createPlayStartTool(args.root, args.sessionId, args.playMode, { actionPayload });
+    tool = createPlayStartTool(args.pipeline, args.root, args.sessionId, args.playMode, { actionPayload });
     params = {
       title,
       ...(payload?.premise ? { premise: payload.premise } : {}),

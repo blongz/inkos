@@ -65,45 +65,28 @@ export function applyPlayMutation(input: ApplyPlayMutationInput): ApplyPlayMutat
     input.db.recordEvent(event);
 
     if (!mutation.blocked) {
-      for (const entity of mutation.entities.upsert) {
-        input.db.upsertEntity(entity);
-      }
-      for (const edge of mutation.edges.expire) {
-        input.db.expireEdge(edge.edgeId, edge.validUntilEventId);
-      }
-      // Relationship edges are fail-open: a single edge that points at an entity
-      // we never saw is skipped, not allowed to crash the whole turn (which used
-      // to wipe an entire turn's mutations and leave the relationship panel empty).
-      const upsertedEntityIds = new Set(mutation.entities.upsert.map((e) => e.id));
-      const endpointExists = (id: string): boolean => upsertedEntityIds.has(id) || input.db.getEntity(id) !== null;
-      for (const edge of mutation.edges.upsert) {
-        if (endpointExists(edge.fromId) && endpointExists(edge.toId)) {
-          input.db.upsertEdge(edge);
-        }
-      }
-      for (const slot of mutation.stateSlots.upsert) {
-        input.db.upsertStateSlot(normalizeStateSlot(slot));
-      }
-      for (const transition of mutation.evidence.transitions) {
-        input.db.upsertStateSlot({
-          id: evidenceStatusSlotId(transition.entityId),
-          ownerEntityId: transition.entityId,
-          kind: "evidence",
-          label: "证据状态",
-          value: {
-            previous: currentEvidenceStatus(input.db, transition.entityId),
-            status: transition.to,
-            reason: transition.reason,
-          },
-          updatedEventId: mutation.eventId,
-        });
-      }
+      applyGraphChanges(input.db, mutation);
     }
 
     return { event, blocked: mutation.blocked };
   };
 
   return input.db.transaction ? input.db.transaction(apply) : apply();
+}
+
+export interface SeedPlayGraphInput {
+  readonly db: PlayReducerDB;
+  readonly mutation: PlayMutationInput;
+}
+
+export function seedPlayGraph(input: SeedPlayGraphInput): void {
+  const mutation = resolveEdgeEndpointLabels(input.db, PlayMutationSchema.parse(input.mutation));
+  validateMutation(input.db, mutation);
+  const apply = () => {
+    if (!mutation.blocked) applyGraphChanges(input.db, mutation);
+  };
+  if (input.db.transaction) input.db.transaction(apply);
+  else apply();
 }
 
 type ParsedPlayMutation = ReturnType<typeof PlayMutationSchema.parse>;
@@ -195,6 +178,42 @@ function validateMutation(db: PlayReducerDB, mutation: ReturnType<typeof PlayMut
     if (evidenceRank(transition.to) < evidenceRank(current)) {
       throw new Error(`Play evidence transition cannot regress from ${current} to ${transition.to}`);
     }
+  }
+}
+
+function applyGraphChanges(db: PlayReducerDB, mutation: ReturnType<typeof PlayMutationSchema.parse>): void {
+  for (const entity of mutation.entities.upsert) {
+    db.upsertEntity(entity);
+  }
+  for (const edge of mutation.edges.expire) {
+    db.expireEdge(edge.edgeId, edge.validUntilEventId);
+  }
+  // Relationship edges are fail-open: a single edge that points at an entity
+  // we never saw is skipped, not allowed to crash the whole turn (which used
+  // to wipe an entire turn's mutations and leave the relationship panel empty).
+  const upsertedEntityIds = new Set(mutation.entities.upsert.map((e) => e.id));
+  const endpointExists = (id: string): boolean => upsertedEntityIds.has(id) || db.getEntity(id) !== null;
+  for (const edge of mutation.edges.upsert) {
+    if (endpointExists(edge.fromId) && endpointExists(edge.toId)) {
+      db.upsertEdge(edge);
+    }
+  }
+  for (const slot of mutation.stateSlots.upsert) {
+    db.upsertStateSlot(normalizeStateSlot(slot));
+  }
+  for (const transition of mutation.evidence.transitions) {
+    db.upsertStateSlot({
+      id: evidenceStatusSlotId(transition.entityId),
+      ownerEntityId: transition.entityId,
+      kind: "evidence",
+      label: "证据状态",
+      value: {
+        previous: currentEvidenceStatus(db, transition.entityId),
+        status: transition.to,
+        reason: transition.reason,
+      },
+      updatedEventId: mutation.eventId,
+    });
   }
 }
 

@@ -621,7 +621,7 @@ function createAgentToolsForMode(params: {
 
   if (params.sessionKind === "play") {
     if (isConfirmed("play_start")) {
-      return [createPlayStartTool(params.projectRoot, params.sessionId, params.playMode, { actionPayload: params.actionPayload })];
+      return [createPlayStartTool(params.pipeline, params.projectRoot, params.sessionId, params.playMode, { actionPayload: params.actionPayload })];
     }
     if (params.playWorldExists) {
       return [createPlayStepTool(params.pipeline, params.projectRoot, params.sessionId)];

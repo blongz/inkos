@@ -15,7 +15,7 @@ import { safeChildPath } from "../utils/path-safety.js";
 import { normalizePlatformId, normalizePlatformOrOther } from "../models/book.js";
 import { generateShortFictionCover, runShortFictionProduction } from "../pipeline/short-fiction-runner.js";
 import { createPlayDB, type PlayGraphDB } from "../play/play-db-factory.js";
-import { PlayRunner, type PlayStepResult } from "../play/play-runner.js";
+import { PlayRunner, type PlayOpeningSeedResult, type PlayStepResult } from "../play/play-runner.js";
 import { PlayStore } from "../play/play-store.js";
 import type { AgentContext } from "../agents/base.js";
 import type { ActionPayload } from "../interaction/action-envelope.js";
@@ -834,11 +834,22 @@ const PlayStartParams = Type.Object({
 
 type PlayStartParamsType = Static<typeof PlayStartParams>;
 
+export interface PlayStartToolOptions {
+  readonly actionPayload?: ActionPayload;
+  readonly runnerFactory?: (input: {
+    readonly projectRoot: string;
+    readonly worldId: string;
+    readonly runId: string;
+    readonly ctx: AgentContext;
+  }) => { seedOpening(input: { sceneText: string; suggestedActions?: readonly string[] }): Promise<PlayOpeningSeedResult | null> };
+}
+
 export function createPlayStartTool(
+  pipeline: PipelineRunner | null,
   projectRoot: string,
   sessionId: string,
   playMode?: "open" | "guided",
-  options: { readonly actionPayload?: ActionPayload } = {},
+  options: PlayStartToolOptions = {},
 ): AgentTool<typeof PlayStartParams> {
   return {
     name: "play_start",
@@ -895,6 +906,33 @@ export function createPlayStartTool(
       }
 
       const suggestedActions = normalizeSuggestedActions(playPayload?.suggestedActions ?? params.suggestedActions);
+      let seed: PlayOpeningSeedResult | null = null;
+      let graph;
+      if (existingTranscript.length === 0 && pipeline) {
+        const db = createPlayDB(store.runDir(world.id, runId));
+        try {
+          const ctx = pipeline.createAgentContext("play");
+          const runner = options.runnerFactory?.({
+            projectRoot,
+            worldId: world.id,
+            runId,
+            ctx,
+          }) ?? new PlayRunner({
+            projectRoot,
+            worldId: world.id,
+            runId,
+            ctx,
+            db,
+          });
+          seed = await runner.seedOpening({ sceneText, suggestedActions });
+          graph = db.snapshot();
+        } catch {
+          // Opening graph seed is a HUD enhancement, not a launch precondition.
+          // Starting the world must stay fail-open when a model drifts.
+        } finally {
+          closePlayDB(db);
+        }
+      }
 
       return textResult(
         [
@@ -914,6 +952,8 @@ export function createPlayStartTool(
           premise: world.premise,
           sceneText,
           suggestedActions,
+          ...(seed ? { seedMutation: seed.mutation } : {}),
+          ...(graph ? { graph } : {}),
         },
       );
     },

@@ -52,7 +52,7 @@ describe("agent play tools", () => {
 
   it("binds the new play world to the chat session and persists the opening scene", async () => {
     const sessionId = "1700000000000-aaaa01";
-    const tool = createPlayStartTool(root, sessionId);
+    const tool = createPlayStartTool(null, root, sessionId);
     const result = await tool.execute("tc-start", {
       title: "雨夜茶馆",
       premise: "玩家扮演欠债茶馆老板，雨夜有人带着账本上门。",
@@ -84,7 +84,7 @@ describe("agent play tools", () => {
 
   it("normalizes object-shaped suggested actions at the tool boundary", async () => {
     const sessionId = "1700000000000-sug001";
-    const tool = createPlayStartTool(root, sessionId);
+    const tool = createPlayStartTool(null, root, sessionId);
     const result = await tool.execute("tc-start-suggestions", {
       title: "老邮局",
       premise: "玩家在地下分拣室值夜班。",
@@ -98,6 +98,47 @@ describe("agent play tools", () => {
     expect(result.details).toMatchObject({
       kind: "play_world_started",
       suggestedActions: ["拆开旧包裹", "检查待销毁信件区的铁门"],
+    });
+  });
+
+  it("seeds the opening graph through the play runner when a pipeline is available", async () => {
+    const sessionId = "1700000000000-seed01";
+    const seedOpening = vi.fn(async () => ({
+      mutation: {
+        eventId: "evt-0",
+        turn: 0,
+        actionKind: "look" as const,
+        summary: "播种开场状态。",
+        entities: { upsert: [] },
+        edges: { upsert: [], expire: [] },
+        stateSlots: { upsert: [] },
+        evidence: { transitions: [] },
+        blocked: false,
+        blockedReason: "",
+        notes: [],
+      },
+    }));
+    const runnerFactory = vi.fn(() => ({ seedOpening }));
+    const tool = createPlayStartTool(pipelineStub(), root, sessionId, undefined, { runnerFactory });
+
+    const result = await tool.execute("tc-start-seed", {
+      title: "雨夜档案",
+      premise: "玩家在县医院档案室值夜班。",
+      initialScene: "档案柜里只有一张无名婴儿照片。",
+      suggestedActions: ["检查照片背面"],
+    });
+
+    expect(runnerFactory).toHaveBeenCalledWith(expect.objectContaining({
+      worldId: sessionId,
+      runId: "main",
+    }));
+    expect(seedOpening).toHaveBeenCalledWith({
+      sceneText: "档案柜里只有一张无名婴儿照片。",
+      suggestedActions: ["检查照片背面"],
+    });
+    expect(result.details).toMatchObject({
+      kind: "play_world_started",
+      seedMutation: expect.objectContaining({ turn: 0 }),
     });
   });
 
@@ -134,7 +175,7 @@ describe("agent play tools", () => {
 
   it("uses the player-chosen playMode for the world, overriding the tool param", async () => {
     const sessionId = "1700000000000-cccc03";
-    const tool = createPlayStartTool(root, sessionId, "guided");
+    const tool = createPlayStartTool(null, root, sessionId, "guided");
     await tool.execute("tc-mode", { title: "选项局", initialScene: "开场。" });
     const store = new PlayStore(root);
     await expect(store.loadWorld(sessionId)).resolves.toMatchObject({ mode: "guided" });
@@ -148,12 +189,12 @@ describe("agent play tools", () => {
     const sessionA = "1700000000000-aaaaaa";
     const sessionB = "1700000000001-bbbbbb";
 
-    await createPlayStartTool(root, sessionA).execute("tc-a", {
+    await createPlayStartTool(null, root, sessionA).execute("tc-a", {
       title: "世界A",
       initialScene: "A 的开场。",
     });
     // World B is created AFTER A, so it is the most-recently-updated world.
-    await createPlayStartTool(root, sessionB).execute("tc-b", {
+    await createPlayStartTool(null, root, sessionB).execute("tc-b", {
       title: "世界B",
       initialScene: "B 的开场。",
     });

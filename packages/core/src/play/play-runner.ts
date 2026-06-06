@@ -16,7 +16,7 @@ import {
   type PlaySceneRender,
 } from "./play-agents.js";
 import { createPlayDB } from "./play-db-factory.js";
-import { applyPlayMutation, type PlayReducerDB } from "./play-reducer.js";
+import { applyPlayMutation, seedPlayGraph, type PlayReducerDB } from "./play-reducer.js";
 import { PlayStore } from "./play-store.js";
 import type { PlayGraphSnapshot } from "./play-file-db.js";
 
@@ -84,6 +84,10 @@ export interface PlayStepResult extends PlaySceneRender {
   readonly mutation: PlayMutation;
 }
 
+export interface PlayOpeningSeedResult {
+  readonly mutation: PlayMutation;
+}
+
 export class PlayRunner {
   private readonly store: PlayStore;
   private readonly db: PlayReducerDB;
@@ -103,6 +107,54 @@ export class PlayRunner {
     this.worldMutator = options.agents?.worldMutator ?? new PlayWorldMutatorAgent(ctx!);
     this.sceneRenderer = options.agents?.sceneRenderer ?? new PlaySceneRendererAgent(ctx!);
     this.sceneReconciler = options.agents?.sceneReconciler ?? (ctx ? new PlaySceneReconcilerAgent(ctx) : null);
+  }
+
+  async seedOpening(input: {
+    readonly sceneText: string;
+    readonly suggestedActions?: readonly string[];
+  }): Promise<PlayOpeningSeedResult | null> {
+    await this.store.ensureRun(this.options.worldId, this.options.runId);
+    const existing = readGraphSnapshot(this.db);
+    if ((existing?.entities.length ?? 0) > 0 || (existing?.stateSlots.length ?? 0) > 0) {
+      return null;
+    }
+
+    const world = await this.store.loadWorld(this.options.worldId);
+    const language = world?.language ?? "zh";
+    const action: PlayActionIntent = {
+      actionKind: "look",
+      intent: language === "en" ? "Seed the opening state for the first playable scene." : "播种第一幕已成立的开场状态。",
+      manner: "",
+      risk: "",
+      ambiguity: "",
+      secondaryActions: [],
+    };
+    const context = await this.buildContextBrief(input.sceneText, language, world?.premise);
+    const mutation = PlayMutationSchema.parse(await this.worldMutator.proposeMutation({
+      turn: 0,
+      input: buildOpeningSeedInput({
+        sceneText: input.sceneText,
+        suggestedActions: input.suggestedActions ?? [],
+        language,
+        premise: world?.premise,
+      }),
+      action,
+      context,
+      language,
+    }));
+    const normalized = PlayMutationSchema.parse({
+      ...mutation,
+      eventId: "evt-0",
+      turn: 0,
+      actionKind: "look",
+    });
+
+    seedPlayGraph({
+      db: this.db,
+      mutation: normalized,
+    });
+    await this.store.writeProjection(this.options.worldId, this.options.runId, "projections/state.md", renderStateBrief({ action, mutation: normalized }));
+    return { mutation: normalized };
   }
 
   async step(input: string): Promise<PlayStepResult> {
@@ -215,6 +267,31 @@ export class PlayRunner {
       return "";
     }
   }
+}
+
+function buildOpeningSeedInput(input: {
+  readonly sceneText: string;
+  readonly suggestedActions: readonly string[];
+  readonly language: "zh" | "en";
+  readonly premise?: string;
+}): string {
+  const isEn = input.language === "en";
+  const lines = isEn
+    ? [
+        "Seed only the state that already exists at the opening of this playable world.",
+        "Do not advance time, do not solve the mystery, and do not narrate a new turn.",
+        input.premise ? `Premise:\n${input.premise}` : "",
+        `Opening scene:\n${input.sceneText}`,
+        input.suggestedActions.length > 0 ? `Suggested player actions:\n${input.suggestedActions.map((action) => `- ${action}`).join("\n")}` : "",
+      ]
+    : [
+        "只播种这个互动世界开场已经成立的状态。",
+        "不要推进时间，不要解谜，不要写新的回合剧情。",
+        input.premise ? `世界前提：\n${input.premise}` : "",
+        `开场正文：\n${input.sceneText}`,
+        input.suggestedActions.length > 0 ? `建议动作：\n${input.suggestedActions.map((action) => `- ${action}`).join("\n")}` : "",
+      ];
+  return lines.filter(Boolean).join("\n\n");
 }
 
 function readGraphSnapshot(db: PlayReducerDB): PlayGraphSnapshot | null {
