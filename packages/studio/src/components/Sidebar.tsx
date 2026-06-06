@@ -178,6 +178,19 @@ export function Sidebar({ nav, activePage, sse, t }: {
     });
   };
 
+  const openBook = (bookId: string) => {
+    setInput("");
+    setExpandedBooks((prev) => {
+      const next = new Set(prev);
+      next.add(bookId);
+      return next;
+    });
+    if (sessionIdsByBook[bookId] === undefined) {
+      void loadSessionList(bookId);
+    }
+    nav.toBook(bookId);
+  };
+
   const sessionsByBook = useMemo(
     () =>
       Object.fromEntries(
@@ -301,19 +314,26 @@ export function Sidebar({ nav, activePage, sse, t }: {
               const isExpanded = expandedBooks.has(book.id);
               return (
                 <div key={book.id}>
-                  {/* 书名行：点击展开折叠，双击进入书 */}
+                  {/* 书名行：箭头展开；标题进入该书，避免聊天区停留在上一本文稿。 */}
                   <div className="group/book flex items-center">
                     <button
                       type="button"
+                      aria-label={isExpanded ? `折叠 ${book.title}` : `展开 ${book.title}`}
                       onClick={() => toggleBook(book.id)}
-                      className={`flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 rounded-md text-sm transition-colors ${
-                        isActiveBook ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-secondary/30"
-                      }`}
+                      className="flex h-8 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-secondary/30 hover:text-foreground transition-colors"
                     >
                       <ChevronRight
                         size={12}
-                        className={`shrink-0 text-muted-foreground/60 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                        className={`transition-transform ${isExpanded ? "rotate-90" : ""}`}
                       />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openBook(book.id)}
+                      className={`flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pr-2 rounded-md text-sm transition-colors ${
+                        isActiveBook ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-secondary/30"
+                      }`}
+                    >
                       <FolderOpen size={14} className="shrink-0 text-muted-foreground/60" />
                       <span className="truncate flex-1 text-left">{book.title}</span>
                     </button>

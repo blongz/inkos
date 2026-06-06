@@ -15,6 +15,62 @@ const ZERO_USAGE = {
 } as const;
 
 describe("FoundationReviewerAgent", () => {
+  it("reviews original foundations against the requested chapter count", async () => {
+    const agent = new FoundationReviewerAgent({
+      client: TEST_CLIENT,
+      model: "test-model",
+      projectRoot: process.cwd(),
+    });
+
+    const chatSpy = vi.spyOn(
+      agent as unknown as { chat: (...args: unknown[]) => Promise<unknown> },
+      "chat",
+    ).mockResolvedValue({
+      content: [
+        "=== DIMENSION: 1 ===",
+        "分数：80",
+        "意见：可用",
+        "=== DIMENSION: 2 ===",
+        "分数：80",
+        "意见：可用",
+        "=== DIMENSION: 3 ===",
+        "分数：80",
+        "意见：可用",
+        "=== DIMENSION: 4 ===",
+        "分数：80",
+        "意见：可用",
+        "=== DIMENSION: 5 ===",
+        "分数：80",
+        "意见：可用",
+        "=== OVERALL ===",
+        "总分：80",
+        "通过：是",
+        "总评：可开写。",
+      ].join("\n"),
+      usage: ZERO_USAGE,
+    });
+
+    await agent.review({
+      language: "zh",
+      mode: "original",
+      targetChapters: 8,
+      foundation: {
+        storyBible: "故事框架",
+        volumeOutline: "8章大纲",
+        bookRules: "规则",
+        currentState: "状态",
+        pendingHooks: "伏笔",
+      },
+    });
+
+    const messages = chatSpy.mock.calls[0]?.[0] as Array<{ role: string; content: string }>;
+    expect(messages[0]?.content).toContain("用户要求的8章");
+    expect(messages[0]?.content).toContain("前5章");
+    expect(messages[0]?.content).toContain("连续8章");
+    expect(messages[0]?.content).not.toContain("支撑40章");
+    expect(messages[0]?.content).not.toContain("连续10章");
+  });
+
   it("does not silently truncate foundation, canon, or style inputs before review", async () => {
     const agent = new FoundationReviewerAgent({
       client: TEST_CLIENT,

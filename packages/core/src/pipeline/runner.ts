@@ -457,6 +457,7 @@ export class PipelineRunner {
     readonly styleGuide?: string;
     readonly language: "zh" | "en";
     readonly stageLanguage: LengthLanguage;
+    readonly targetChapters?: number;
     readonly maxRetries?: number;
   }): Promise<ArchitectOutput> {
     const maxRetries = params.maxRetries ?? this.config.foundationReviewRetries ?? 2;
@@ -474,6 +475,7 @@ export class PipelineRunner {
         sourceCanon: params.sourceCanon,
         styleGuide: params.styleGuide,
         language: params.language,
+        targetChapters: params.targetChapters,
       });
 
       this.config.logger?.info(
@@ -502,6 +504,7 @@ export class PipelineRunner {
       sourceCanon: params.sourceCanon,
       styleGuide: params.styleGuide,
       language: params.language,
+      targetChapters: params.targetChapters,
     });
     this.config.logger?.info(
       `Foundation final review: ${finalReview.totalScore}/100 ${finalReview.passed ? "PASSED" : "ACCEPTED (max retries)"}`,
@@ -668,6 +671,7 @@ export class PipelineRunner {
       mode: "original",
       language: resolvedLanguage,
       stageLanguage,
+      targetChapters: book.targetChapters,
     });
     try {
       this.logStage(stageLanguage, { zh: "保存书籍配置", en: "saving book config" });
@@ -792,6 +796,7 @@ export class PipelineRunner {
         foundation,
         mode: "original",
         language: resolvedLanguage,
+        targetChapters: book.targetChapters,
       } as Parameters<FoundationReviewerAgent["review"]>[0]);
       if (!review.passed) {
         this.config.logger?.warn?.(
@@ -913,6 +918,7 @@ export class PipelineRunner {
       sourceCanon: fanficCanon,
       language: resolvedLanguage,
       stageLanguage,
+      targetChapters: book.targetChapters,
     });
     this.logStage(stageLanguage, { zh: "写入基础设定文件", en: "writing foundation files" });
     await architect.writeFoundationFiles(
@@ -967,6 +973,7 @@ export class PipelineRunner {
       mode: "original",
       language: resolvedLanguage,
       stageLanguage,
+      targetChapters: book.targetChapters,
     });
 
     this.logStage(stageLanguage, { zh: "写入基础设定文件", en: "writing foundation files" });
@@ -2660,6 +2667,7 @@ ${matrix}`,
               mode: "series",
               language: resolvedLanguage === "en" ? "en" : "zh",
               stageLanguage: resolvedLanguage,
+              targetChapters: book.targetChapters,
             })
           : await architect.generateFoundationFromImport(book, foundationSource);
         await architect.writeFoundationFiles(

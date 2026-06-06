@@ -26,6 +26,7 @@ export class FoundationReviewerAgent extends BaseAgent {
     readonly sourceCanon?: string;
     readonly styleGuide?: string;
     readonly language: "zh" | "en";
+    readonly targetChapters?: number;
   }): Promise<FoundationReviewResult> {
     const canonBlock = params.sourceCanon
       ? `\n## 原作正典参照\n${params.sourceCanon}\n`
@@ -35,7 +36,7 @@ export class FoundationReviewerAgent extends BaseAgent {
       : "";
 
     const dimensions = params.mode === "original"
-      ? this.originalDimensions(params.language)
+      ? this.originalDimensions(params.language, params.targetChapters)
       : this.derivativeDimensions(params.language, params.mode);
 
     const systemPrompt = params.language === "en"
@@ -52,21 +53,26 @@ export class FoundationReviewerAgent extends BaseAgent {
     return this.parseReviewResult(response.content, dimensions);
   }
 
-  private originalDimensions(language: "zh" | "en"): ReadonlyArray<string> {
+  private originalDimensions(language: "zh" | "en", targetChapters?: number): ReadonlyArray<string> {
+    const target = Number.isFinite(targetChapters) && targetChapters && targetChapters > 0
+      ? Math.round(targetChapters)
+      : 40;
+    const openingWindow = Math.min(5, target);
+    const repeatWindow = Math.min(10, Math.max(3, target));
     return language === "en"
       ? [
-          "Core Conflict (Is there a clear, compelling central conflict that can sustain 40 chapters?)",
-          "Opening Momentum (Can the first 5 chapters create a page-turning hook?)",
+          `Core Conflict (Is there a clear, compelling central conflict that can sustain the requested ${target} chapters?)`,
+          `Opening Momentum (Can the first ${openingWindow} chapters create a page-turning hook?)`,
           "World Coherence (Is the worldbuilding internally consistent and specific?)",
           "Character Differentiation (Are the main characters distinct in voice and motivation?)",
-          "Pacing Feasibility (Does the volume outline have enough variety — not the same beat for 10 chapters?)",
+          `Pacing Feasibility (Does the outline fit the requested ${target} chapters and avoid repeating the same beat for ${repeatWindow} chapters?)`,
         ]
       : [
-          "核心冲突（是否有清晰且有足够张力的核心冲突支撑40章？）",
-          "开篇节奏（前5章能否形成翻页驱动力？）",
+          `核心冲突（是否有清晰且有足够张力的核心冲突支撑用户要求的${target}章？）`,
+          `开篇节奏（前${openingWindow}章能否形成翻页驱动力？）`,
           "世界一致性（世界观是否内洽且具体？）",
           "角色区分度（主要角色的声音和动机是否各不相同？）",
-          "节奏可行性（卷纲是否有足够变化——不会连续10章同一种节拍？）",
+          `节奏可行性（大纲是否适配用户要求的${target}章，并避免连续${repeatWindow}章同一种节拍？）`,
         ];
   }
 
