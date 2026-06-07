@@ -2728,12 +2728,17 @@ ${matrix}`,
           ruleStack: governedInput.ruleStack,
         });
 
-        // Save chapter file + core truth files (state, ledger, hooks)
-        await writer.saveChapter(bookDir, {
+        const chapterWordCount = countChapterLength(ch.content, countingMode);
+        const persistedOutput: WriteChapterOutput = {
           ...output,
+          content: ch.content,
+          wordCount: chapterWordCount,
           postWriteErrors: [],
           postWriteWarnings: [],
-        }, gp.numericalSystem, resolvedLanguage);
+        };
+
+        // Save chapter file + core truth files (state, ledger, hooks)
+        await writer.saveChapter(bookDir, persistedOutput, gp.numericalSystem, resolvedLanguage);
 
         // Save extended truth files (summaries, subplots, emotional arcs, character matrix)
         await writer.saveNewTruthFiles(bookDir, {
@@ -2747,7 +2752,6 @@ ${matrix}`,
         // Update chapter index
         const existingIndex = await this.state.loadChapterIndex(input.bookId);
         const now = new Date().toISOString();
-        const chapterWordCount = countChapterLength(ch.content, countingMode);
         const newEntry: ChapterMeta = {
           number: chapterNumber,
           title: output.title,
