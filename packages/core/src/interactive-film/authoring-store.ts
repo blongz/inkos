@@ -139,11 +139,14 @@ export async function recordPhaseVisit(
   projectId: string,
   phase: string,
 ): Promise<void> {
-  const state = await loadAuthoringState(projectRoot, projectId);
-  const next: AuthoringState = {
-    ...state,
-    phaseRevs: { ...(state.phaseRevs ?? {}), [phase]: state.rev },
-  };
-  await mkdir(projectDir(projectRoot, projectId), { recursive: true });
-  await writeFile(authoringStatePath(projectRoot, projectId), JSON.stringify(next, null, 2), "utf-8");
+  const lockKey = `${projectRoot}::${projectId}`;
+  return withProjectLock(lockKey, async () => {
+    const state = await loadAuthoringState(projectRoot, projectId);
+    const next: AuthoringState = {
+      ...state,
+      phaseRevs: { ...(state.phaseRevs ?? {}), [phase]: state.rev },
+    };
+    await mkdir(projectDir(projectRoot, projectId), { recursive: true });
+    await writeFile(authoringStatePath(projectRoot, projectId), JSON.stringify(next, null, 2), "utf-8");
+  });
 }

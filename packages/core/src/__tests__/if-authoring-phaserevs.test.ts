@@ -12,7 +12,7 @@ describe("authoring-state phaseRevs (additive)", () => {
 
   it("old state without phaseRevs still loads", async () => {
     const s = await loadAuthoringState(root, "p");
-    expect(s.phaseRevs ?? undefined).toBeUndefined();
+    expect(s.phaseRevs).toBeUndefined();
   });
 
   it("recordPhaseVisit stores current rev under the phase, preserving other fields", async () => {
@@ -21,5 +21,16 @@ describe("authoring-state phaseRevs (additive)", () => {
     const s = await loadAuthoringState(root, "p");
     expect(s.phase).toBe("world");          // preserved
     expect(s.phaseRevs?.structure).toBe(s.rev); // recorded current rev
+  });
+
+  it("recordPhaseVisit accumulates multiple phases without clobbering prior entries", async () => {
+    await applyGraphDelta({ projectRoot: root, projectId: "p", delta: StoryGraphDeltaSchema.parse({ worldAnchor: { storyCore: "X" } }), phase: "world" });
+    await recordPhaseVisit(root, "p", "structure");
+    await applyGraphDelta({ projectRoot: root, projectId: "p", delta: StoryGraphDeltaSchema.parse({ worldAnchor: { storyCore: "Y" } }), phase: "world" });
+    await recordPhaseVisit(root, "p", "workshop");
+    const s = await loadAuthoringState(root, "p");
+    expect(typeof s.phaseRevs?.structure).toBe("number"); // first visit still present
+    expect(typeof s.phaseRevs?.workshop).toBe("number");  // second visit also present
+    expect(s.phaseRevs?.workshop).toBeGreaterThan(s.phaseRevs?.structure as number); // workshop recorded at a later rev
   });
 });
